@@ -267,7 +267,7 @@ def _render_sidebar() -> None:
 # Top bar
 # ─────────────────────────────────────────────────────────────────────────────
 def _render_topbar(news_updated: str, data_updated: str) -> None:
-    now_str = datetime.now().strftime("%H:%M %Z · %b %d, %Y")
+    now_str = datetime.now().strftime("%H:%M · %b %d, %Y")
     st.markdown(
         f"""
         <div class="topbar">

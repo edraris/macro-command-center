@@ -1,7 +1,11 @@
+"""
+Country search/selector — institutional style.
+"""
 from __future__ import annotations
 
 import streamlit as st
 
+from config import COLORS
 from utils.country_utils import get_all_countries, get_country_metadata
 
 
@@ -14,11 +18,10 @@ def render_search() -> str:
 
     current = st.session_state.get("selected_country", countries[0])
     selected = st.selectbox(
-        "Select a country to explore",
+        "Select country",
         countries,
         index=countries.index(current),
         format_func=label,
-        help="Search by typing country name or region.",
     )
     st.session_state.selected_country = selected
     return selected

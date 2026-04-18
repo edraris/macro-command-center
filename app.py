@@ -1,368 +1,754 @@
+"""
+Macro Center — main application entry point.
+Full page structure:
+  1. Compact header bar
+  2. Main interactive world map (central)
+  3. Selected country overview panel
+  4. Key macro indicators
+  5. Trend charts
+  6. Macro news flow
+  7. Country risk summary
+  8. Collapsible source panel
+"""
 from __future__ import annotations
 
 import streamlit as st
 
 try:
     from dotenv import load_dotenv
-except ModuleNotFoundError:  # pragma: no cover - optional during bare import verification
+except ModuleNotFoundError:
     def load_dotenv() -> bool:
         return False
 
-from components.chart_panel import render_trend_grid
-from components.compare_mode import render_compare_mode
-from components.country_map import render_map
-from components.header import render_header
-from components.insights_box import render_insights_box
-from components.kpi_cards import render_kpi_cards
-from components.news_section import render_news_section
-from components.search_bar import render_search
-from config import COLORS
-from utils.country_utils import get_all_countries, get_country_metadata
-from services.data_cache import clear_all_caches, get_country_snapshot, get_indicator_series
+from config import COLORS, CACHE_TTL
+from data.country_data import get_all_countries, get_country_metadata, compute_risks, get_regime_tag
 from services.news_service import get_all_news
-from utils.country_utils import get_country_metadata
-from utils.formatters import format_date
-from utils.sentiment import get_market_sentiment
+from services.data_cache import (
+    clear_all_caches,
+    get_country_snapshot,
+    get_indicator_series,
+    get_map_dataset,
+)
 
 load_dotenv()
 
 
-def inject_global_css() -> None:
+# ─────────────────────────────────────────────────────────────────────────────
+# CSS — institutional dark theme
+# ─────────────────────────────────────────────────────────────────────────────
+def _inject_css() -> None:
     st.markdown(
         f"""
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-            :root {{
-                --bg: {COLORS["background"]};
-                --card: {COLORS["card_surface"]};
-                --border: {COLORS["card_border"]};
-                --text: {COLORS["text_primary"]};
-                --muted: {COLORS["text_secondary"]};
-                --accent: {COLORS["accent_blue"]};
-                --positive: {COLORS["positive_green"]};
-                --negative: {COLORS["negative_red"]};
-                --amber: {COLORS["amber"]};
-                --radius: 20px;
-                --pad: 24px;
-                --gap: 20px;
-                --section-gap: 40px;
-            }}
-            .stApp {{
-                background:
-                    radial-gradient(circle at top left, rgba(41,151,255,0.18), transparent 26%),
-                    radial-gradient(circle at top right, rgba(255,255,255,0.05), transparent 18%),
-                    linear-gradient(180deg, #090b12 0%, var(--bg) 100%);
-                color: var(--text);
-                font-family: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
-            }}
-            .block-container {{
-                max-width: 1500px;
-                padding-top: 28px;
-                padding-bottom: 48px;
-            }}
-            .mc-card, .hero-shell {{
-                background: var(--card);
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                backdrop-filter: blur(22px);
-                -webkit-backdrop-filter: blur(22px);
-                box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
-            }}
-            .hero-shell {{
-                padding: 30px;
-                margin-bottom: var(--section-gap);
-            }}
-            .hero-topline {{
-                color: var(--accent);
-                font-size: 0.74rem;
-                letter-spacing: 0.22em;
-                text-transform: uppercase;
-                margin-bottom: 18px;
-            }}
-            .hero-title {{
-                font-size: 2.8rem;
-                font-weight: 700;
-                letter-spacing: -0.02em;
-                line-height: 1;
-            }}
-            .hero-subtitle {{
-                color: var(--muted);
-                font-size: 0.95rem;
-                margin-top: 8px;
-            }}
-            .hero-nav {{
-                display: flex;
-                gap: 12px;
-                margin-top: 24px;
-                flex-wrap: wrap;
-            }}
-            .hero-nav span, .section-badge, .news-pill {{
-                padding: 8px 12px;
-                border-radius: 999px;
-                background: rgba(255,255,255,0.06);
-                color: var(--text);
-                font-size: 0.76rem;
-                letter-spacing: 0.06em;
-                text-transform: uppercase;
-            }}
-            .section-heading-row {{
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 14px;
-            }}
-            .section-heading {{
-                font-size: 1rem;
-                font-weight: 600;
-                letter-spacing: 0.06em;
-                text-transform: uppercase;
-            }}
-            .country-header {{
-                display: flex;
-                justify-content: space-between;
-                gap: 16px;
-                align-items: flex-start;
-                margin-bottom: 18px;
-            }}
-            .country-name {{
-                font-size: 2rem;
-                font-weight: 700;
-                letter-spacing: -0.02em;
-            }}
-            .country-meta, .as-of-text, .news-source, .news-date, .sentiment-copy {{
-                color: var(--muted);
-                font-size: 0.9rem;
-            }}
-            .mc-kpi-card {{
-                padding: var(--pad);
-                min-height: 180px;
-                transition: transform 140ms ease, border-color 140ms ease;
-            }}
-            .mc-kpi-card:hover {{
-                transform: translateY(-4px);
-                border-color: rgba(41,151,255,0.35);
-            }}
-            .mc-kpi-label {{
-                color: var(--muted);
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                font-size: 0.78rem;
-            }}
-            .mc-kpi-value {{
-                font-size: 2.2rem;
-                font-weight: 700;
-                margin-top: 18px;
-            }}
-            .mc-kpi-delta {{
-                margin-top: 20px;
-                font-size: 0.92rem;
-                font-weight: 600;
-            }}
-            .stMarkdown p {{
-                color: var(--text);
-            }}
-            [data-testid="stSidebar"] {{
-                background: rgba(8, 10, 15, 0.95);
-                border-right: 1px solid var(--border);
-            }}
-            .insights-shell {{
-                padding: var(--pad);
-            }}
-            .insight-row {{
-                display: flex;
-                gap: 12px;
-                align-items: flex-start;
-                margin-top: 14px;
-                font-size: 0.95rem;
-            }}
-            .insight-dot {{
-                width: 8px;
-                height: 8px;
-                margin-top: 7px;
-                border-radius: 999px;
-                background: var(--accent);
-                box-shadow: 0 0 0 6px rgba(41,151,255,0.12);
-                flex: 0 0 auto;
-            }}
-            .sentiment-pill {{
-                display: inline-flex;
-                align-items: center;
-                gap: 10px;
-                padding: 12px 16px;
-                border-radius: 999px;
-                background: rgba(48, 209, 88, 0.10);
-                border: 1px solid rgba(48, 209, 88, 0.24);
-                margin-bottom: 10px;
-            }}
-            .news-card {{
-                padding: var(--pad);
-                margin-bottom: 20px;
-                min-height: 220px;
-            }}
-            .news-meta-row {{
-                display: flex;
-                gap: 10px;
-                align-items: center;
-                flex-wrap: wrap;
-                margin-bottom: 14px;
-            }}
-            .news-title {{
-                font-size: 1.06rem;
-                font-weight: 700;
-                line-height: 1.35;
-                margin-bottom: 10px;
-            }}
-            .news-summary {{
-                color: var(--muted);
-                font-size: 0.9rem;
-                line-height: 1.5;
-                min-height: 52px;
-            }}
-            .news-link {{
-                margin-top: 16px;
-                text-align: right;
-            }}
-            .news-link a {{
-                color: var(--accent);
-                text-decoration: none;
-            }}
-            .fade-in {{
-                animation: fadeUp 420ms ease both;
-            }}
-            .chip-active {{
-                height: 2px;
-                background: var(--accent);
-                border-radius: 999px;
-                margin-top: 6px;
-            }}
-            .compare-row {{
-                display: flex;
-                justify-content: space-between;
-                padding: 14px 0;
-                border-bottom: 1px solid rgba(255,255,255,0.06);
-            }}
-            .left-better {{
-                color: var(--positive);
-                font-weight: 600;
-            }}
-            .right-better {{
-                color: var(--amber);
-                font-weight: 600;
-            }}
-            .compare-chart {{
-                padding: 16px;
-                margin-bottom: 16px;
-            }}
-            @keyframes fadeUp {{
-                from {{ opacity: 0; transform: translateY(6px); }}
-                to {{ opacity: 1; transform: translateY(0); }}
-            }}
-            @media (max-width: 960px) {{
-                .country-header, .section-heading-row {{
-                    flex-direction: column;
-                    align-items: flex-start;
-                }}
-            }}
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap');
+
+        :root {{
+            --bg:        {COLORS["background"]};
+            --surface:    {COLORS["surface"]};
+            --card:       {COLORS["card_surface"]};
+            --border:     {COLORS["card_border"]};
+            --text:       {COLORS["text_primary"]};
+            --muted:      {COLORS["text_secondary"]};
+            --dim:        {COLORS["text_muted"]};
+            --accent:     {COLORS["accent_blue"]};
+            --positive:   {COLORS["positive_green"]};
+            --negative:   {COLORS["negative_red"]};
+            --amber:      {COLORS["amber"]};
+            --divider:    {COLORS["divider"]};
+        }}
+
+        .stApp {{ background-color: var(--bg); color: var(--text);
+                  font-family: "IBM Plex Sans", Inter, -apple-system, sans-serif; }}
+
+        /* Typography */
+        h1,h2,h3,h4 {{ font-family: "IBM Plex Sans",Inter,sans-serif;
+                       font-weight: 700; letter-spacing: -0.01em; color: var(--text); }}
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {{ width: 4px; height: 4px; }}
+        ::-webkit-scrollbar-track {{ background: var(--bg); }}
+        ::-webkit-scrollbar-thumb {{ background: var(--dim); border-radius: 2px; }}
+
+        /* Layout */
+        .block-container {{ max-width: 1600px; padding-top: 16px; padding-bottom: 60px; }}
+
+        /* Sidebar */
+        [data-testid="stSidebar"] {{ background: {COLORS["surface"]};
+                                    border-right: 1px solid var(--border); }}
+        [data-testid="stSidebar"] .stMarkdown {{ color: var(--text); }}
+
+        /* Cards */
+        .mc-card {{ background: var(--card); border: 1px solid var(--border);
+                    border-radius: 4px; padding: 18px 20px; }}
+
+        /* Top bar */
+        .topbar {{ display:flex; align-items:center; justify-content:space-between;
+                   padding: 10px 0 10px; border-bottom: 1px solid var(--divider);
+                   margin-bottom: 20px; }}
+        .topbar-brand {{ font-size: 0.62rem; letter-spacing: 0.22em; text-transform: uppercase;
+                         color: var(--accent); font-weight: 700; }}
+        .topbar-title {{ font-size: 1.05rem; font-weight: 700; color: var(--text);
+                         letter-spacing: -0.01em; }}
+        .topbar-meta {{ font-size: 0.68rem; color: var(--dim); text-align: right; line-height: 1.5; }}
+
+        /* Section label */
+        .sec-label {{ font-size: 0.62rem; letter-spacing: 0.2em; text-transform: uppercase;
+                      color: var(--dim); font-weight: 600; margin-bottom: 10px; }}
+
+        /* KPI cards */
+        .kpi {{ background: var(--card); border: 1px solid var(--border); border-radius: 4px;
+                padding: 16px 18px; }}
+        .kpi-label {{ font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase;
+                       color: var(--dim); font-weight: 600; margin-bottom: 8px; }}
+        .kpi-value {{ font-size: 1.5rem; font-weight: 700; color: var(--text); line-height: 1; }}
+        .kpi-delta {{ font-size: 0.72rem; font-weight: 600; margin-top: 7px; }}
+        .kpi-sub   {{ font-size: 0.62rem; color: var(--muted); margin-top: 3px; }}
+
+        /* Country header */
+        .cname {{ font-size: 1.5rem; font-weight: 700; color: var(--text); line-height: 1.1; }}
+        .cmeta {{ font-size: 0.75rem; color: var(--muted); margin-top: 4px; }}
+        .casof  {{ font-size: 0.65rem; color: var(--dim); text-align: right; }}
+        .ctag   {{ display:inline-block; font-size:0.62rem; letter-spacing:0.1em; text-transform:uppercase;
+                   padding:4px 10px; border-radius:2px; font-weight:600; margin-right:6px; }}
+
+        /* Risk pills */
+        .risk-low    {{ color: {COLORS['risk_low']};    border: 1px solid {COLORS['risk_low']}44;
+                        background: {COLORS['risk_low']}11; }}
+        .risk-medium {{ color: {COLORS['risk_medium']}; border: 1px solid {COLORS['risk_medium']}44;
+                        background: {COLORS['risk_medium']}11; }}
+        .risk-high   {{ color: {COLORS['risk_high']};   border: 1px solid {COLORS['risk_high']}44;
+                        background: {COLORS['risk_high']}11; }}
+
+        /* Insight row */
+        .ins-row {{ display:flex; gap:10px; align-items:flex-start; margin-bottom:10px;
+                    font-size:0.8rem; line-height:1.5; color: var(--muted); }}
+        .ins-dot  {{ width:4px; height:4px; border-radius:50%; background:var(--accent);
+                     margin-top:7px; flex-shrink:0; }}
+
+        /* News card */
+        .news-card {{ background:var(--card); border:1px solid var(--border);
+                      border-left:3px solid var(--accent); border-radius:4px;
+                      padding:16px 18px; margin-bottom:12px; }}
+        .news-cat {{ font-size:0.6rem; letter-spacing:0.1em; text-transform:uppercase;
+                     font-weight:600; }}
+        .news-src  {{ font-size:0.65rem; color:var(--muted); font-weight:500; }}
+        .news-fresh{{ font-size:0.62rem; color:var(--dim); margin-left:auto; }}
+        .news-title{{ font-size:0.88rem; font-weight:700; line-height:1.35; color:var(--text);
+                      margin:8px 0 6px; }}
+        .news-summary{{ font-size:0.75rem; line-height:1.55; color:var(--muted); }}
+        .news-link-btn {{ font-size:0.65rem; color:var(--accent); text-decoration:none;
+                          letter-spacing:0.04em; font-weight:600; }}
+        .news-no-link  {{ font-size:0.65rem; color:var(--dim); font-style:italic; }}
+
+        /* Freshness badge colours */
+        .fresh-today   {{ color:{COLORS['positive_green']}; font-weight:600; }}
+        .fresh-week    {{ color:{COLORS['amber']};           font-weight:600; }}
+        .fresh-old     {{ color:{COLORS['text_muted']}; }}
+
+        /* Spacers */
+        .sp {{ height:10px; }}
+        .sm {{ height:18px; }}
+        .md {{ height:28px; }}
+        .lg {{ height:44px; }}
+
+        /* Compare mode */
+        .cmp-country {{ font-size:1.2rem; font-weight:700; margin-bottom:2px; }}
+        .cmp-meta    {{ font-size:0.72rem; color:var(--muted); }}
+        .cmp-row     {{ display:flex; justify-content:space-between; padding:11px 0;
+                        border-bottom:1px solid var(--divider); font-size:0.8rem; }}
+        .cmp-better  {{ font-weight:600; }}
+
+        /* Map layer toggle */
+        .layer-btn {{ border:1px solid var(--border) !important; border-radius:3px !important;
+                      background:var(--card) !important; color:var(--muted) !important;
+                      font-size:0.62rem !important; letter-spacing:0.08em !important;
+                      text-transform:uppercase !important; }}
+        .layer-btn.active {{ border-color:var(--accent) !important; color:var(--accent) !important;
+                             background:var(--accent_dim) !important; }}
+
+        /* Compare row colours */
+        .pos {{ color:var(--positive); font-weight:600; }}
+        .neg {{ color:var(--negative); font-weight:600; }}
+
+        /* Responsive */
+        @media (max-width: 900px) {{ .topbar {{ flex-direction:column; gap:4px; }} }}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
 
-def init_state() -> None:
+# ─────────────────────────────────────────────────────────────────────────────
+# Session state
+# ─────────────────────────────────────────────────────────────────────────────
+def _init_state() -> None:
     defaults = {
-        "selected_country": "us",
-        "compare_mode": False,
-        "news_category_filter": None,
-        "fred_api_key_input": "",
+        "selected_country":  "us",
+        "news_filter":       None,
+        "map_layer":        "gdp_value",
+        "compare_mode":     False,
+        "sources_open":     False,
+        "fred_api_key":     "",
+        "refresh_key":      0,
     }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
 
-def render_sidebar() -> None:
+# ─────────────────────────────────────────────────────────────────────────────
+# Sidebar
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_sidebar() -> None:
     with st.sidebar:
-        st.markdown("## Macro Center")
-        render_search()
+        st.markdown(
+            f"<div style='font-size:0.6rem;letter-spacing:0.22em;text-transform:uppercase;"
+            f"color:{COLORS['accent_blue']};font-weight:700;'>Macro Intelligence</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<div style='font-size:1rem;font-weight:700;color:{COLORS['text_primary']};margin-bottom:16px;'>"
+            f"MACRO CENTER</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Country selector
+        countries = get_all_countries()
+        idx = countries.index(st.session_state.selected_country) if st.session_state.selected_country in countries else 0
+        selected = st.selectbox(
+            "Country",
+            countries,
+            index=idx,
+            format_func=lambda k: f"{get_country_metadata(k)['flag']}  {get_country_metadata(k)['name']}",
+        )
+        if selected != st.session_state.selected_country:
+            st.session_state.selected_country = selected
+            st.rerun()
+
         st.divider()
-        st.markdown("### Countries")
-        for country_key in get_all_countries():
-            meta = get_country_metadata(country_key)
-            if st.button(f"{meta['flag']} {meta['name']}", key=f"side-country-{country_key}", use_container_width=True):
-                st.session_state.selected_country = country_key
-                st.session_state.compare_mode = False
+
+        # All countries list
+        st.markdown(f"<div class='sec-label' style='margin-bottom:8px;'>Countries</div>", unsafe_allow_html=True)
+        for ck in countries:
+            meta = get_country_metadata(ck)
+            if st.button(f"{meta['flag']}  {meta['name']}", key=f"sb-{ck}", use_container_width=True):
+                st.session_state.selected_country = ck
+                st.rerun()
+
         st.divider()
-        st.markdown("### Settings")
-        st.session_state.compare_mode = st.toggle("Compare mode", value=st.session_state.compare_mode)
-        st.text_input("FRED API Key", key="fred_api_key_input", type="password", placeholder="Loaded from env by default")
+
+        # Settings
+        st.markdown(f"<div class='sec-label' style='margin-bottom:8px;'>Settings</div>", unsafe_allow_html=True)
+        st.session_state.compare_mode = st.toggle(
+            "Compare mode",
+            value=st.session_state.compare_mode,
+        )
+        st.text_input(
+            "FRED API Key",
+            key="fred_api_key",
+            type="password",
+            placeholder="Optional — env default",
+        )
+        if st.button("Refresh data", use_container_width=True):
+            clear_all_caches()
+            st.session_state.refresh_key += 1
+            st.rerun()
         if st.button("Clear cache", use_container_width=True):
             clear_all_caches()
             st.success("Cache cleared.")
-        st.caption("API calls are cached for 1 hour. Composite views are cached for 5 minutes.")
+
+        st.caption(
+            f"News: {CACHE_TTL['news']//60}min · API: {CACHE_TTL['api']//3600}h · Composite: {CACHE_TTL['composite']//60}min",
+            help="Data is cached by type. News and live API data have independent TTLs.",
+        )
 
 
-def render_country_dashboard(country_key: str) -> None:
-    meta = get_country_metadata(country_key)
-    snapshot = get_country_snapshot(country_key)
-    trend_map = {
-        metric: get_indicator_series(country_key, metric)
-        for metric in ("inflation", "gdp_growth", "unemployment", "interest_rate")
-    }
-    sentiment_tag, sentiment_copy = get_market_sentiment(country_key, snapshot)
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Top bar
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_topbar(news_updated: str, data_updated: str) -> None:
+    now_str = datetime.now().strftime("%H:%M %Z · %b %d, %Y")
     st.markdown(
         f"""
-        <div class="country-header">
+        <div class="topbar">
             <div>
-                <div class="country-name">{meta['flag']} {meta['name']}</div>
-                <div class="country-meta">{meta['region']} · {meta['income_group']}</div>
-                <div class="country-meta" style="margin-top:8px;">{meta['summary_sentence']}</div>
+                <div class="topbar-brand">Macro Intelligence Platform</div>
+                <div class="topbar-title">MACRO CENTER</div>
             </div>
-            <div class="as-of-text">Data as of {format_date(snapshot['as_of'][:10]) if snapshot.get('as_of') else 'N/A'}</div>
+            <div class="topbar-meta">
+                <div>Data: {data_updated}</div>
+                <div>News: {news_updated}</div>
+                <div style="margin-top:2px;color:{COLORS['accent_blue']};">{now_str}</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    render_kpi_cards(snapshot)
-    st.markdown("<div style='height:40px;'></div>", unsafe_allow_html=True)
 
-    left_col, right_col = st.columns([2, 1], gap="medium")
-    with left_col:
-        render_trend_grid(trend_map)
-    with right_col:
+# ─────────────────────────────────────────────────────────────────────────────
+# Country overview panel
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_country_overview(country_key: str, snapshot: dict) -> None:
+    meta = get_country_metadata(country_key)
+    ind = snapshot
+    regime = get_regime_tag(ind)
+
+    regime_colors = {
+        "Disinflation":       COLORS["positive_green"],
+        "Reflation":          COLORS["negative_red"],
+        "Stagnation":         COLORS["negative_red"],
+        "Policy tightening":  COLORS["amber"],
+        "Policy easing":      COLORS["accent_blue"],
+        "Fiscal stress":      COLORS["negative_red"],
+        "External vulnerability": COLORS["negative_red"],
+        "Stable expansion":   COLORS["accent_blue"],
+        "Overheating":        COLORS["negative_red"],
+    }
+    rc = regime_colors.get(regime, COLORS["text_secondary"])
+
+    as_of_str = snapshot.get("as_of", "")
+    if as_of_str:
+        try:
+            from datetime import datetime as dt
+            as_of_fmt = dt.fromisoformat(as_of_str).strftime("%b %d, %Y")
+        except Exception:
+            as_of_fmt = as_of_str[:10]
+    else:
+        as_of_fmt = "N/A"
+
+    st.markdown(
+        f"""
+        <div class="mc-card" style="margin-bottom:14px;">
+            <!-- Country name + meta row -->
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid {COLORS['divider']};">
+                <div>
+                    <div class="cname">{meta['flag']}  {meta['name']}</div>
+                    <div class="cmeta">{meta['region']} · {meta['income_group']}</div>
+                </div>
+                <div class="casof">
+                    <div>Data as of</div>
+                    <div style="color:{COLORS['muted']};margin-top:2px;">{as_of_fmt}</div>
+                </div>
+            </div>
+
+            <!-- Regime tag + summary sentence -->
+            <div style="margin-bottom:12px;">
+                <span class="ctag" style="color:{rc};border:1px solid {rc}44;background:{rc}11;">{regime}</span>
+                <span style="font-size:0.78rem;color:{COLORS['muted']};font-style:italic;
+                             font-family:'IBM Plex Serif',Georgia,serif;">
+                    {meta['summary_sentence']}
+                </span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KPI cards — 10 key macro indicators
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_kpi_cards(country_key: str, snapshot: dict) -> None:
+    ind = snapshot
+
+    cards = [
+        ("GDP",           _fmt_gdp(ind.get("gdp_value")),            "USD",       None),
+        ("GDP Growth",    _fmt_pct(ind.get("gdp_growth", 0)),       "yoy",      _delta(snapshot.get("gdp_growth_delta", 0), higher_positive=True)),
+        ("Inflation",    _fmt_pct(ind.get("inflation", 0)),         "yoy",      _delta(snapshot.get("inflation_delta", 0), higher_positive=False, warn_threshold=4.0)),
+        ("Unemployment", _fmt_pct(ind.get("unemployment", 0)),      "%",        _delta(snapshot.get("unemployment_delta", 0), higher_positive=False)),
+        ("Policy Rate",  _fmt_pct(ind.get("interest_rate", 0)),    "%",        _delta(snapshot.get("interest_rate_delta", 0), higher_positive=False)),
+        ("Debt / GDP",   _fmt_pct(ind.get("debt_to_gdp", 0)),      "% of GDP", None),
+        ("Curr. Account",_fmt_pct(ind.get("current_account", 0)),    "% of GDP", None),
+        ("Population",   _fmt_pop(ind.get("population")),           "people",   None),
+        ("GDP per capita",_fmt_gdp_pc(ind.get("gdp_per_capita")),   "USD",       None),
+        ("Currency",     ind.get("currency", "N/A"),               "CCY",       None),
+    ]
+
+    rows = [cards[:5], cards[5:]]
+    for row in rows:
+        cols = st.columns(5)
+        for col, (label, value, unit, (delta_text, delta_color)) in zip(cols, row):
+            with col:
+                st.markdown(
+                    f"""
+                    <div class="kpi">
+                        <div class="kpi-label">{label}</div>
+                        <div class="kpi-value">{value}</div>
+                        <div class="kpi-sub">{unit}</div>
+                        <div class="kpi-delta" style="color:{delta_color};">{delta_text or '&nbsp;'}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+        if row == rows[0]:
+            st.markdown("<div class='sm'></div>", unsafe_allow_html=True)
+
+
+def _fmt_gdp(v) -> str:
+    if v is None:
+        return "N/A"
+    if v >= 1e12:
+        return f"${v/1e12:.2f}T"
+    if v >= 1e9:
+        return f"${v/1e9:.1f}B"
+    return f"${v:,.0f}"
+
+def _fmt_gdp_pc(v) -> str:
+    if v is None:
+        return "N/A"
+    return f"${v:,.0f}"
+
+def _fmt_pct(v: float, decimals: int = 1) -> str:
+    if v is None:
+        return "N/A"
+    return f"{v:.{decimals}f}%"
+
+def _fmt_pop(v) -> str:
+    if v is None:
+        return "N/A"
+    if v >= 1e9:
+        return f"{v/1e9:.2f}B"
+    if v >= 1e6:
+        return f"{v/1e6:.1f}M"
+    return f"{v:,.0f}"
+
+def _delta(value: float, higher_positive: bool, warn_threshold: float = None) -> tuple[str, str]:
+    if value is None:
+        return "", COLORS["text_muted"]
+    if abs(value) < 0.05:
+        return "Flat", COLORS["text_secondary"]
+    color = COLORS["positive_green"] if (value > 0) == higher_positive else COLORS["negative_red"]
+    sign  = "+" if value > 0 else ""
+    return f"{sign}{value:.1f}pts vs prior", color
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Map layer toggle + world map
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_map_section(country_key: str) -> None:
+    from components.country_map import render_map
+
+    st.markdown(f"<div class='sec-label' style='margin-bottom:10px;'>"
+                 f"Global Macro Map — click a country to navigate</div>",
+                 unsafe_allow_html=True)
+
+    layers = ["gdp_value", "gdp_growth", "inflation", "interest_rate"]
+    layer_labels = {"gdp_value": "GDP", "gdp_growth": "Growth", "inflation": "Inflation", "interest_rate": "Policy Rate"}
+
+    cols = st.columns(len(layers))
+    for col, layer in zip(cols, layers):
+        active = layer == st.session_state.map_layer
+        label  = layer_labels[layer]
+        if col.button(
+            label,
+            use_container_width=True,
+            key=f"layer-{layer}",
+        ):
+            st.session_state.map_layer = layer
+
+    st.markdown("<div class='sp'></div>", unsafe_allow_html=True)
+
+    render_map(country_key, layer=st.session_state.map_layer)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Trend charts
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_trends(country_key: str) -> None:
+    from components.chart_panel import render_trend_grid
+    from services.data_cache import get_indicator_series
+
+    st.markdown(f"<div class='sec-label' style='margin-bottom:10px;'>Macroeconomic Trends</div>", unsafe_allow_html=True)
+    trend_map = {
+        m: get_indicator_series(country_key, m)
+        for m in ("inflation", "gdp_growth", "unemployment", "interest_rate")
+    }
+    render_trend_grid(trend_map)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# News flow
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_news(news_items: list[dict], fetched_at: str, filter_cat: str = None) -> None:
+    from components.news_section import render_news_section
+    from config import NEWS_CATEGORY_LABELS, NEWS_CATEGORIES
+
+    st.markdown(f"<div class='sec-label' style='margin-bottom:10px;'>Macro News Flow</div>", unsafe_allow_html=True)
+
+    active = [n for n in news_items if not filter_cat or n.get("category") == filter_cat]
+
+    # Filter chips
+    all_opts  = [None] + NEWS_CATEGORIES
+    all_labels= ["All"] + [NEWS_CATEGORY_LABELS.get(c, c.title()) for c in NEWS_CATEGORIES]
+    chip_cols = st.columns(len(all_opts))
+    for col, opt, lbl in zip(chip_cols, all_opts, all_labels):
+        is_active = opt == filter_cat or (opt is None and filter_cat is None)
+        if col.button(lbl, use_container_width=True, key=f"nc-{lbl}"):
+            st.session_state.news_filter = opt
+
+    st.markdown("<div class='sp'></div>", unsafe_allow_html=True)
+    render_news_section(active, fetched_at)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Risk panel
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_risk_panel(country_key: str, snapshot: dict) -> None:
+    from config import RISK_LABELS
+
+    risks = compute_risks(snapshot)
+
+    risk_colors = {
+        "low":    COLORS["risk_low"],
+        "medium": COLORS["risk_medium"],
+        "high":   COLORS["risk_high"],
+    }
+
+    st.markdown(
+        f"<div class='sec-label' style='margin-bottom:12px;'>Country Risk Assessment</div>",
+        unsafe_allow_html=True,
+    )
+
+    items = list(risks.items())
+    for i in range(0, len(items), 3):
+        row_items = items[i:i+3]
+        cols = st.columns(3)
+        for col, (risk_key, level) in zip(cols, row_items):
+            color = risk_colors.get(level, COLORS["text_secondary"])
+            label = RISK_LABELS.get(risk_key, risk_key)
+            with col:
+                st.markdown(
+                    f"""
+                    <div class="mc-card" style="padding:14px 16px;text-align:center;">
+                        <div class="ctag risk-{level}">{level.upper()}</div>
+                        <div style="font-size:0.82rem;font-weight:600;color:{COLORS['text_primary']};margin-top:6px;">
+                            {label}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+        if i + 3 < len(items):
+            st.markdown("<div class='sp'></div>", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# What Matters Now — analytical commentary
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_insights(country_key: str, snapshot: dict, regime: str) -> None:
+    from config import SENTIMENT_TAGS
+    from data.country_data import get_country_metadata
+
+    meta    = get_country_metadata(country_key)
+    ind     = snapshot
+    bullets = []
+
+    inf   = ind.get("inflation", 0)
+    grow  = ind.get("gdp_growth", 0)
+    unem  = ind.get("unemployment", 0)
+    rate  = ind.get("interest_rate", 0)
+    delta = ind.get("interest_rate_delta", 0)
+    debt  = ind.get("debt_to_gdp", 0)
+    ca    = ind.get("current_account", 0)
+
+    if inf > 5.0 and grow < 1.5:
+        bullets.append(
+            f"Inflation at {inf:.1f}% coexists with sub-trend growth ({grow:.1f}%), "
+            "a stagflationary mix that severely constrains the central bank's options."
+        )
+    elif inf > 4.0:
+        bullets.append(
+            f"At {inf:.1f}%, inflation is still materially above the central bank's target. "
+            "Services prices — particularly wages — remain the primary residual risk."
+        )
+    elif inf < 2.0:
+        bullets.append(
+            f"Inflation at {inf:.1f}% gives the central bank room to ease, "
+            "but the pace of normalisation will depend on the growth outlook."
+        )
+    else:
+        bullets.append(
+            f"Inflation at {inf:.1f}% is close to target. The focus shifts to "
+            "sustaining that progress without premature loosening that could reignite price pressures."
+        )
+
+    if delta >= 0.25:
+        bullets.append(
+            f"Rates held or raised ({delta:+.1f}pts), maintaining a restrictive posture. "
+            "The transmission to demand is underway with a typical 12–18 month lag."
+        )
+    elif delta <= -0.25:
+        bullets.append(
+            f"Rate cuts of {delta:+.1f}pts are in train. The easing cycle should support "
+            "activity through the year, though credit conditions remain tight for now."
+        )
+
+    if unem <= 4.0:
+        bullets.append(
+            f"Unemployment at {unem:.1f}% signals a tight labour market. "
+            "Wage growth is likely to stay elevated, keeping services inflation sticky."
+        )
+    elif unem >= 6.5:
+        bullets.append(
+            f"Unemployment at {unem:.1f}% signals growing labour slack. "
+            "This should eventually ease wage and services price pressures, "
+            "giving the central bank more room to support activity."
+        )
+
+    if grow >= 4.0:
+        bullets.append(
+            f"Growth of {grow:.1f}% is above trend for a developed economy, "
+            "reinforcing a higher-for-longer policy backdrop and limiting easing scope."
+        )
+    elif grow < 0.5:
+        bullets.append(
+            f"Growth of {grow:.1f}% signals significant economic slack. "
+            "The risk of a more pronounced downturn is elevated and warrants close monitoring."
+        )
+
+    if debt >= 100 and ca < -3:
+        bullets.append(
+            f"Sovereign finances are under pressure: debt at {debt:.0f}% of GDP with a "
+            f"current account deficit of {ca:.1f}% creates external vulnerability. "
+            "Bond spreads and currency risk premiums could rise if fiscal credibility slips."
+        )
+    elif debt >= 100:
+        bullets.append(
+            f"Debt at {debt:.0f}% of GDP is a long-term constraint on fiscal flexibility. "
+            "Debt servicing costs will remain elevated even if rates fall, limiting "
+            "the budget's ability to respond to future shocks."
+        )
+
+    bullets.append(
+        f"Current regime: <strong>{regime}</strong>. "
+        f"{SENTIMENT_TAGS.get(regime, 'The macro backdrop remains fluid.')}"
+    )
+
+    st.markdown(
+        f"""
+        <div class="mc-card">
+            <div class="sec-label" style="margin-bottom:14px;">What Matters Now</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    for b in bullets[:6]:
+        st.markdown(
+            f"""<div class="ins-row"><span class="ins-dot"></span><span>{b}</span></div>""",
+            unsafe_allow_html=True,
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Compare mode
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_compare() -> None:
+    from components.compare_mode import render_compare_mode
+    render_compare_mode()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Source panel (collapsible)
+# ─────────────────────────────────────────────────────────────────────────────
+def _render_source_panel() -> None:
+    with st.expander("Data sources & methodology", expanded=st.session_state.sources_open):
         st.markdown(
             f"""
-            <div class="sentiment-pill">
-                <span>{sentiment_tag}</span>
+            <div style="font-size:0.78rem; color:{COLORS['muted']}; line-height:1.6;">
+            <strong style="color:{COLORS['text_primary']};">Indicator data</strong><br>
+            Primary: World Bank Open Data API — all countries, all non-US series.<br>
+            US indicators: Federal Reserve Economic Data (FRED) API, accessed via FRED API key.<br>
+            Fallback: curated static estimates from IMF World Economic Outlook when APIs are unavailable.<br>
+            <br>
+            <strong style="color:{COLORS['text_primary']};">News data</strong><br>
+            Live: Reuters Business, Reuters Economics, Financial Times, CNBC, MarketWatch RSS feeds.<br>
+            Fallback: curated macro summaries when all RSS sources fail.<br>
+            News items without a valid source URL are clearly labelled "Source unavailable".<br>
+            <br>
+            <strong style="color:{COLORS['text_primary']};">Cache strategy</strong><br>
+            World Bank / FRED API data: cached {CACHE_TTL['api']//3600}h.<br>
+            Derived country snapshots: cached {CACHE_TTL['composite']//60}min.<br>
+            Map dataset: cached {CACHE_TTL['map']//60}min.<br>
+            News items: cached {CACHE_TTL['news']//60}min.<br>
+            <br>
+            <strong style="color:{COLORS['text_primary']};">Risk methodology</strong><br>
+            Inflation Risk: low < 2.5%, medium < 4.0%, high ≥ 4.0%.<br>
+            Fiscal Risk: low < 50%, medium < 80%, high ≥ 80% of GDP.<br>
+            External Risk: low > -3%, medium > -5%, high ≤ -5% of current account.<br>
+            Growth Momentum: low < 1%, medium < 2.5%, high ≥ 2.5%.<br>
+            Policy Stance: low < 3.5%, medium < 5.0%, high ≥ 5.0%.<br>
             </div>
-            <div class="sentiment-copy">{sentiment_copy}</div>
             """,
             unsafe_allow_html=True,
         )
-        st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True)
-        render_insights_box(country_key, snapshot, sentiment_tag)
-
-    st.markdown("<div style='height:40px;'></div>", unsafe_allow_html=True)
-    render_news_section(get_all_news(country_key), st.session_state.news_category_filter)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────────────────────
 def main() -> None:
-    st.set_page_config(page_title="Macro Center V2", layout="wide", initial_sidebar_state="expanded")
-    inject_global_css()
-    init_state()
-    render_sidebar()
-    render_header()
+    from datetime import datetime as dt
 
+    st.set_page_config(
+        page_title="Macro Center",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
+    _inject_css()
+    _init_state()
+    _render_sidebar()
+
+    # Get news first (for timestamps)
+    news_items, news_fetched = get_all_news(st.session_state.selected_country)
+
+    # Get data snapshot
+    snapshot = get_country_snapshot(st.session_state.selected_country)
+    data_as_of = snapshot.get("as_of", "")[:16] if snapshot.get("as_of") else "N/A"
+    regime = get_regime_tag(snapshot)
+
+    # Top bar
+    _render_topbar(news_fetched, data_as_of)
+
+    # Compare mode vs country view
     if st.session_state.compare_mode:
-        render_compare_mode()
+        _render_compare()
     else:
-        render_country_dashboard(st.session_state.selected_country)
+        country_key = st.session_state.selected_country
 
-    st.markdown("<div style='height:40px;'></div>", unsafe_allow_html=True)
-    st.markdown('<div class="section-heading">Global GDP Map</div>', unsafe_allow_html=True)
-    render_map(st.session_state.selected_country)
+        # 1. Country overview panel
+        _render_country_overview(country_key, snapshot)
+
+        # 2. KPI cards
+        st.markdown("<div class='sm'></div>", unsafe_allow_html=True)
+        _render_kpi_cards(country_key, snapshot)
+
+        # 3. Map + layer toggle
+        st.markdown("<div class='md'></div>", unsafe_allow_html=True)
+        _render_map_section(country_key)
+
+        # 4+5. Trends + risk panel
+        st.markdown("<div class='md'></div>", unsafe_allow_html=True)
+        trend_col, risk_col = st.columns([2.0, 1.0], gap="large")
+        with trend_col:
+            _render_trends(country_key)
+        with risk_col:
+            _render_risk_panel(country_key, snapshot)
+
+        # 6. What Matters Now
+        st.markdown("<div class='md'></div>", unsafe_allow_html=True)
+        insight_col, news_col = st.columns([1.2, 2.0], gap="large")
+        with insight_col:
+            _render_insights(country_key, snapshot, regime)
+        with news_col:
+            _render_news(news_items, news_fetched, st.session_state.news_filter)
+
+    # 7. Source panel
+    st.markdown("<div class='md'></div>", unsafe_allow_html=True)
+    _render_source_panel()
+
+    st.markdown("<div class='lg'></div>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

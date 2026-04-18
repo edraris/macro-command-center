@@ -20,6 +20,8 @@ except ModuleNotFoundError:
     def load_dotenv() -> bool:
         return False
 
+from datetime import datetime
+
 from config import COLORS, CACHE_TTL
 from data.country_data import get_all_countries, get_country_metadata, compute_risks, get_regime_tag
 from services.news_service import get_all_news

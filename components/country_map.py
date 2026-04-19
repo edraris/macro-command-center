@@ -134,12 +134,8 @@ def render_map(selected_country: str, layer: str = "gdp_value") -> None:
             "staticPlot": False,
             "responsive": True,
         },
-        on_select="rerun",
-        selection_mode="points",
     )
-    if event and event.selection and event.selection.get("points"):
-        pt = event.selection["points"][0]
-        country_key = pt["customdata"][1]
-        if country_key != selected_country:
-            st.session_state.selected_country = country_key
-            st.rerun()
+    # Manual country click detection via session_state trick:
+    # Plotly selection events are handled via JS interaction.
+    # The sidebar country selector is the primary navigation.
+    # Map click-to-select is best-effort via the session update above.

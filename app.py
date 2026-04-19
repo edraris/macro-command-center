@@ -79,6 +79,46 @@ def _inject_css() -> None:
                                     border-right: 1px solid var(--border); }}
         [data-testid="stSidebar"] .stMarkdown {{ color: var(--text); }}
 
+        /* Sidebar buttons — institutional */
+        [data-testid="stSidebar"] .stButton > button {{ 
+            background: {COLORS["card_surface"]} !important;
+            color: {COLORS["text_primary"]} !important;
+            border: 1px solid {COLORS["card_border"]} !important;
+            border-radius: 3px !important;
+            font-size: 0.72rem !important;
+            font-weight: 500 !important;
+            padding: 6px 12px !important;
+            width: 100% !important;
+            transition: border-color 0.15s, color 0.15s !important;
+        }}
+        [data-testid="stSidebar"] .stButton > button:hover {{ 
+            border-color: {COLORS["accent_blue"]} !important;
+            color: {COLORS["accent_blue"]} !important;
+        }}
+
+        /* Sidebar selectbox */
+        [data-testid="stSidebar"] .stSelectbox > div > div {{ 
+            background: {COLORS["card_surface"]} !important;
+            border: 1px solid {COLORS["card_border"]} !important;
+            border-radius: 3px !important;
+        }}
+        [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] {{
+            background: {COLORS["card_surface"]} !important;
+        }}
+        [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div {{
+            background: {COLORS["card_surface"]} !important;
+            border-color: {COLORS["card_border"]} !important;
+        }}
+
+        /* Sidebar toggle */
+        [data-testid="stSidebar"] .stToggle label {{ color: {COLORS["text_secondary"]} !important; }}
+        
+        /* Sidebar divider */
+        [data-testid="stSidebar"] hr {{ border-color: {COLORS["divider"]} !important; }}
+
+        /* Sidebar caption */
+        [data-testid="stSidebar"] .stCaption {{ color: {COLORS["text_muted"]} !important; }}
+
         /* Cards */
         .mc-card {{ background: var(--card); border: 1px solid var(--border);
                     border-radius: 4px; padding: 18px 20px; }}
@@ -171,6 +211,87 @@ def _inject_css() -> None:
         /* Compare row colours */
         .pos {{ color:var(--positive); font-weight:600; }}
         .neg {{ color:var(--negative); font-weight:600; }}
+
+        /* Streamlit widget overrides — institutional dark */
+        
+        /* Main area buttons */
+        .stMainBlockContainer .stButton > button {{
+            background: {COLORS["card_surface"]} !important;
+            color: {COLORS["accent_blue"]} !important;
+            border: 1px solid {COLORS["accent_blue"]}44 !important;
+            border-radius: 3px !important;
+            font-size: 0.65rem !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.06em !important;
+            text-transform: uppercase !important;
+            padding: 6px 14px !important;
+        }}
+        .stMainBlockContainer .stButton > button:hover {{
+            border-color: {COLORS["accent_blue"]} !important;
+            background: {COLORS["accent_dim"]} !important;
+        }}
+
+        /* Filter chip buttons (news category) */
+        [data-testid="stHorizontalBlock"] .stButton > button {{
+            background: {COLORS["card_surface"]} !important;
+            color: {COLORS["text_secondary"]} !important;
+            border: 1px solid {COLORS["divider"]} !important;
+            border-radius: 2px !important;
+            font-size: 0.62rem !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.08em !important;
+            padding: 4px 10px !important;
+        }}
+        [data-testid="stHorizontalBlock"] .stButton > button:hover {{
+            border-color: {COLORS["accent_blue"]} !important;
+            color: {COLORS["accent_blue"]} !important;
+        }}
+
+        /* Streamlit tabs */
+        .stTabs [data-baseweb="tab-list"] {{ gap: 0 !important; }}
+        .stTabs [data-baseweb="tab" {{
+            background: transparent !important;
+            color: {COLORS["text_secondary"]} !important;
+            border-bottom: 2px solid transparent !important;
+            font-size: 0.72rem !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.06em !important;
+            padding: 8px 16px !important;
+        }}
+        .stTabs [data-baseweb="tab"]:hover {{
+            color: {COLORS["text_primary"]} !important;
+            background: transparent !important;
+        }}
+        .stTabs [aria-selected="true"] {{
+            color: {COLORS["accent_blue"]} !important;
+            border-bottom-color: {COLORS["accent_blue"]} !important;
+        }}
+
+        /* Streamlit expander */
+        .streamlit-expander {{ 
+            border: 1px solid {COLORS["divider"]} !important;
+            border-radius: 4px !important;
+            background: {COLORS["card_surface"]} !important;
+        }}
+        .streamlit-expander header {{
+            color: {COLORS["text_secondary"]} !important;
+            font-size: 0.72rem !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.06em !important;
+        }}
+
+        /* Alert / info boxes */
+        .stAlert {{
+            background: {COLORS["card_surface"]} !important;
+            border: 1px solid {COLORS["divider"]} !important;
+            border-radius: 4px !important;
+        }}
+
+        /* Success/info messages */
+        div[data-testid="stSuccess"] {{
+            background: {COLORS["card_surface"]} !important;
+            color: {COLORS["positive_green"]} !important;
+        }}
 
         /* Responsive */
         @media (max-width: 900px) {{ .topbar {{ flex-direction:column; gap:4px; }} }}

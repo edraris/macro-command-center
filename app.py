@@ -45,18 +45,19 @@ def _inject_css() -> None:
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap');
 
         :root {{
-            --bg:        {COLORS["background"]};
-            --surface:    {COLORS["surface"]};
-            --card:       {COLORS["card_surface"]};
-            --border:     {COLORS["card_border"]};
-            --text:       {COLORS["text_primary"]};
-            --muted:      {COLORS["text_secondary"]};
-            --dim:        {COLORS["text_muted"]};
-            --accent:     {COLORS["accent_blue"]};
-            --positive:   {COLORS["positive_green"]};
-            --negative:   {COLORS["negative_red"]};
-            --amber:      {COLORS["amber"]};
-            --divider:    {COLORS["divider"]};
+            --bg:          {COLORS["background"]};
+            --surface:     {COLORS["surface"]};
+            --card:        {COLORS["card_surface"]};
+            --border:      {COLORS["card_border"]};
+            --text:        {COLORS["text_primary"]};
+            --muted:       {COLORS["text_secondary"]};
+            --dim:         {COLORS["text_muted"]};
+            --accent:      {COLORS["accent_blue"]};
+            --accent_dim:  {COLORS["accent_dim"]};
+            --positive:    {COLORS["positive_green"]};
+            --negative:    {COLORS["negative_red"]};
+            --amber:       {COLORS["amber"]};
+            --divider:     {COLORS["divider"]};
         }}
 
         .stApp {{ background-color: var(--bg); color: var(--text);
@@ -213,9 +214,9 @@ def _inject_css() -> None:
         .neg {{ color:var(--negative); font-weight:600; }}
 
         /* Streamlit widget overrides — institutional dark */
-        
+
         /* Main area buttons */
-        .stMainBlockContainer .stButton > button {{
+        .stApp .stButton > button {{
             background: {COLORS["card_surface"]} !important;
             color: {COLORS["accent_blue"]} !important;
             border: 1px solid {COLORS["accent_blue"]}44 !important;
@@ -226,7 +227,7 @@ def _inject_css() -> None:
             text-transform: uppercase !important;
             padding: 6px 14px !important;
         }}
-        .stMainBlockContainer .stButton > button:hover {{
+        .stApp .stButton > button:hover {{
             border-color: {COLORS["accent_blue"]} !important;
             background: {COLORS["accent_dim"]} !important;
         }}

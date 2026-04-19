@@ -24,7 +24,7 @@ def render_kpi_cards(indicators: dict) -> None:
         with col:
             st.markdown(
                 f"""
-                <div class="kpi-card">
+                <div class="kpi">
                     <div class="kpi-label">{label}</div>
                     <div class="kpi-value">{value}</div>
                     <div class="kpi-delta" style="color:{delta_color};">

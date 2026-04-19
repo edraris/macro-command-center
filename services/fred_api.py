@@ -10,14 +10,14 @@ from config import FRED_API_KEY
 
 
 def fetch_fred_series(series_id: str) -> pd.DataFrame:
-    session_key = ""
+    session_key_val = ""
     try:
-        session_key = st.session_state.get("fred_api_key_input", "")
+        session_key_val = st.session_state.get("fred_api_key", "")
     except Exception:
-        session_key = ""
-    api_key = session_key or FRED_API_KEY or os.getenv("FRED_API_KEY", "")
+        session_key_val = ""
+    api_key = session_key_val or FRED_API_KEY or os.getenv("FRED_API_KEY", "")
     if not api_key:
-        raise ValueError("Missing FRED_API_KEY")
+        raise ValueError("Missing FRED_API_KEY — add it in Settings or set FRED_API_KEY env var")
 
     response = requests.get(
         "https://api.stlouisfed.org/fred/series/observations",
@@ -32,10 +32,19 @@ def fetch_fred_series(series_id: str) -> pd.DataFrame:
         value = item.get("value")
         if value in (None, "."):
             continue
-        rows.append({"year": pd.to_datetime(item["date"]).year, "value": float(value)})
+        try:
+            dt = pd.to_datetime(item["date"])
+            rows.append({"year": dt.year, "value": float(value)})
+        except (ValueError, TypeError):
+            continue
 
     if not rows:
         return pd.DataFrame(columns=["year", "value"])
 
     frame = pd.DataFrame(rows)
-    return frame.groupby("year", as_index=False)["value"].mean().sort_values("year").reset_index(drop=True)
+
+    # Use last available value per year (more accurate for growth/inflation series
+    # where annual values are reported as year-end or annual averages)
+    frame = frame.groupby("year", as_index=False).last()
+    frame = frame.sort_values("year").reset_index(drop=True)
+    return frame

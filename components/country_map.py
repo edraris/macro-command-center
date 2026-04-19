@@ -84,10 +84,15 @@ def render_map(selected_country: str, layer: str = "gdp_value") -> None:
 
     # Highlight selected country with a distinct border
     if selected_iso:
-        for trace in fig.data:
-            if trace.location == selected_iso:
-                trace.marker.line.color = COLORS["accent_blue"]
-                trace.marker.line.width = 2.5
+        try:
+            for trace in fig.data:
+                if hasattr(trace, 'locations') and selected_iso in trace.locations:
+                    idx = trace.locations.index(selected_iso)
+                    if hasattr(trace, 'marker') and trace.marker and hasattr(trace.marker, 'line'):
+                        trace.marker.line.color = COLORS["accent_blue"]
+                        trace.marker.line.width = 2.5
+        except Exception:
+            pass  # Best-effort highlight; don't break the map
 
     fig.update_traces(
         hovertemplate=(

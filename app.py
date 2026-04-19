@@ -329,14 +329,14 @@ def _render_country_overview(country_key: str, snapshot: dict) -> None:
                 </div>
                 <div class="casof">
                     <div>Data as of</div>
-                    <div style="color:{COLORS['muted']};margin-top:2px;">{as_of_fmt}</div>
+                    <div style="color:{COLORS['text_secondary']};margin-top:2px;">{as_of_fmt}</div>
                 </div>
             </div>
 
             <!-- Regime tag + summary sentence -->
             <div style="margin-bottom:12px;">
                 <span class="ctag" style="color:{rc};border:1px solid {rc}44;background:{rc}11;">{regime}</span>
-                <span style="font-size:0.78rem;color:{COLORS['muted']};font-style:italic;
+                <span style="font-size:0.78rem;color:{COLORS['text_secondary']};font-style:italic;
                              font-family:'IBM Plex Serif',Georgia,serif;">
                     {meta['summary_sentence']}
                 </span>
@@ -369,7 +369,8 @@ def _render_kpi_cards(country_key: str, snapshot: dict) -> None:
     rows = [cards[:5], cards[5:]]
     for row in rows:
         cols = st.columns(5)
-        for col, (label, value, unit, (delta_text, delta_color)) in zip(cols, row):
+        for col, (label, value, unit, delta) in zip(cols, row):
+            delta_text, delta_color = delta if delta is not None else ("", COLORS["text_muted"])
             with col:
                 st.markdown(
                     f"""
@@ -656,7 +657,7 @@ def _render_source_panel() -> None:
     with st.expander("Data sources & methodology", expanded=st.session_state.sources_open):
         st.markdown(
             f"""
-            <div style="font-size:0.78rem; color:{COLORS['muted']}; line-height:1.6;">
+            <div style="font-size:0.78rem; color:{COLORS['text_secondary']}; line-height:1.6;">
             <strong style="color:{COLORS['text_primary']};">Indicator data</strong><br>
             Primary: World Bank Open Data API — all countries, all non-US series.<br>
             US indicators: Federal Reserve Economic Data (FRED) API, accessed via FRED API key.<br>

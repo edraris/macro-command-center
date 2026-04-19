@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import urlparse
 
 import streamlit as st
 
@@ -531,7 +532,7 @@ def _parse_entry(entry: ET.Element, feed_key: str) -> Optional[dict]:
             "summary":   summary,
             "source":    SOURCE_REGISTRY.get(feed_key, feed_key),
             "date":      date_str,
-            "url":       url,
+            "url":       url if _is_valid_url(url) else "",
         }
     except Exception:
         return None
@@ -570,6 +571,43 @@ def _freshness(date_str: str) -> str:
         return "Unknown date"
 
 
+def _is_valid_url(url: str) -> bool:
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url.strip())
+    except Exception:
+        return False
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    lowered = url.lower()
+    blocked_tokens = {
+        "abc123",
+        "def456",
+        "xyz789",
+        "/content/china-",
+        "/content/uk-",
+        "/content/france-",
+        "/content/germany-",
+        "/content/japan-",
+        "/content/india-",
+        "/content/brazil-",
+        "/content/australia-",
+        "/content/canada-",
+        "/content/us-",
+        "/articles/canada-",
+        "/articles/uk-",
+        "/articles/germany-",
+        "/articles/china-",
+        "/articles/japan-",
+        "/articles/india-",
+        "/articles/brazil-",
+        "/articles/australia-",
+        "/articles/france-",
+    }
+    return not any(token in lowered for token in blocked_tokens)
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=CACHE_TTL["news"], show_spinner=False)
@@ -599,13 +637,14 @@ def get_all_news(country_key: str) -> tuple[list[dict], str]:
                     continue
             raw_items.append(parsed)
 
-    # Deduplicate by URL
+    # Deduplicate by URL when available, otherwise headline/date
     seen_urls: set[str] = set()
     deduped: list[dict] = []
     for item in raw_items:
-        if item["url"] in seen_urls:
+        dedupe_key = item["url"] or f"{item['headline']}|{item['date']}"
+        if dedupe_key in seen_urls:
             continue
-        seen_urls.add(item["url"])
+        seen_urls.add(dedupe_key)
         deduped.append(item)
 
     deduped.sort(key=lambda x: x.get("date", ""), reverse=True)
@@ -627,7 +666,7 @@ def get_all_news(country_key: str) -> tuple[list[dict], str]:
 
 
 def _get_static_fallback(country_key: str) -> list[dict]:
-    """Return static fallback items for a country. Each has a real macro URL."""
+    """Return static fallback items for a country with validated links only."""
     templates = STATIC_FALLBACK.get(country_key, STATIC_FALLBACK.get("us", []))
     result = []
     for idx, row in enumerate(templates):
@@ -644,6 +683,6 @@ def _get_static_fallback(country_key: str) -> list[dict]:
             "source":     SOURCE_REGISTRY.get(country_key, "Financial Times"),
             "date":       DATES_RECENT[idx % len(DATES_RECENT)],
             "category":   cat,
-            "url":        url,
+            "url":        url if _is_valid_url(url) else "",
         })
     return result

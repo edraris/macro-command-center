@@ -20,7 +20,7 @@ except ModuleNotFoundError:
     def load_dotenv() -> bool:
         return False
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from config import COLORS, CACHE_TTL
 from data.country_data import get_all_countries, get_country_metadata, compute_risks, get_regime_tag
@@ -312,8 +312,7 @@ def _render_country_overview(country_key: str, snapshot: dict) -> None:
     as_of_str = snapshot.get("as_of", "")
     if as_of_str:
         try:
-            from datetime import datetime as dt
-            as_of_fmt = dt.fromisoformat(as_of_str).strftime("%b %d, %Y")
+            as_of_fmt = datetime.fromisoformat(as_of_str).strftime("%b %d, %Y")
         except Exception:
             as_of_fmt = as_of_str[:10]
     else:
@@ -690,8 +689,6 @@ def _render_source_panel() -> None:
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 def main() -> None:
-    from datetime import datetime as dt
-
     st.set_page_config(
         page_title="Macro Center",
         layout="wide",

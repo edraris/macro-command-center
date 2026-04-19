@@ -496,7 +496,7 @@ def _render_briefing(country_key: str, snapshot: dict) -> None:
     flag = meta.get("flag", "")
     cname = meta.get("name", "")
 
-    col_left, col_right = st.columns([1, 0])
+    col_left, col_right = st.columns([3, 1])
 
     with col_left:
         st.markdown(f"### {flag}  {cname}")
@@ -864,7 +864,7 @@ def _render_news_card(item: dict, col, idx: int) -> None:
         )
 
         # Category + source row — using native Streamlit
-        row_cols = st.columns([1, 0, 0, 0])
+        row_cols = st.columns([3, 1, 1, 1])
         with row_cols[0]:
             st.markdown(
                 f"<span class='news-cat' style='color:{accent};'>"

@@ -249,7 +249,7 @@ def _inject_css() -> None:
 
         /* Streamlit tabs */
         .stTabs [data-baseweb="tab-list"] {{ gap: 0 !important; }}
-        .stTabs [data-baseweb="tab" {{
+        .stTabs [data-baseweb="tab"] {{
             background: transparent !important;
             color: {COLORS["text_secondary"]} !important;
             border-bottom: 2px solid transparent !important;
